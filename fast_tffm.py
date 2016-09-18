@@ -33,6 +33,7 @@ def read_config(section, option, not_null = True):
 GENERAL_SECTION = 'General'
 TRAIN_SECTION = 'Train'
 PREDICT_SECTION = 'Predict'
+STRING_DELIMITER = ','
 
 model_file = read_config(GENERAL_SECTION, 'model_file')
 factor_num = int(read_config(GENERAL_SECTION, 'factor_num'))
@@ -46,12 +47,12 @@ if mode == 'train':
     thread_num = int(read_config(TRAIN_SECTION, 'thread_num'))
     epoch_num = int(read_config(TRAIN_SECTION, 'epoch_num'))
     train_files_str = read_config(TRAIN_SECTION, 'train_files')
-    train_files = [s.strip() for s in train_files_str.split(':')]
+    train_files = [s.strip() for s in train_files_str.split(STRING_DELIMITER)]
     validation_files_str = read_config(TRAIN_SECTION, 'validation_files', False)
     if validation_files_str == None:
         validation_files = None
     else:
-        validation_files = [s.strip() for s in validation_files_str.split(':')]
+        validation_files = [s.strip() for s in validation_files_str.split(STRING_DELIMITER)]
     learning_rate = float(read_config(TRAIN_SECTION, 'learning_rate'))
     adagrad_init_accumulator = float(read_config(TRAIN_SECTION, 'adagrad.initial_accumulator'))
 
