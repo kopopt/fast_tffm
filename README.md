@@ -1,6 +1,8 @@
 # fast_tffm
 An optimized factorization machine implementation based on tensorflow
 
+Working on benchmarks with other implementation and distributed version.
+
 ## Usage
 
 ### Compile
