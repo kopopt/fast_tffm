@@ -1,5 +1,5 @@
 # Tensorflow-based Distributed Factorization Machine
-An efficient distributation factoriazation machine implementation based on tensorflow (cpu only).
+An efficient distributed factoriazation machine implementation based on tensorflow (cpu only).
 
 1. Support both multi-thread local machine training and distributed training.
 2. Can easily benefit from numerous implementations of operators in tensorflow, e.g., different optimizors, loss functions.
@@ -41,7 +41,7 @@ python fast_tffm.py dist_predict sample.cfg worker 1
 ```
 ## Benchmark
 
-1. Local Mode. Training Efficiency compared with difacto using the same configuration
+1. Local Mode. Training speed compared with difacto using the same configuration
 
   + *Configuration*: 36672494 training examples, 10 threads, factor_num = 8, batch_size = 10000, epoch_num = 1, vocabulary_size = 40000000
   + **Difacto**: 337 seconds. 108820 examples / second.
@@ -60,4 +60,4 @@ label: currently only support binary. 0 or 1
 
 fid: feature id. Starting from 0.
 
-Check the data files in the data folder for more examples. The data files are samples from [criteo lab dataset](http://labs.criteo.com/tag/dataset/).
+Check the data files in the data folder for more examples. The data files are sampled from [criteo lab dataset](http://labs.criteo.com/tag/dataset/).
