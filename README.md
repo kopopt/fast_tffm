@@ -47,8 +47,10 @@ python fast_tffm.py dist_predict sample.cfg worker 1
   + **Difacto**: 337 seconds. 108820 examples / second.
   + **FastTffm**: 157 seconds. 233582 examples / second.
   
-2. Distriubuted Mode.
-  + Coming soon...
+2. Distriubuted Mode. (I did not find other open source projects which support distributed training. Difacto claims so, but their distributed mode is not implemeted yet)
+  + *Configuration*: 36672494 training examples, 10 threads, factor_num = 8, batch_size = 10000, epoch_num = 1, vocabulary_size = 40000000
+  + *Cluster*: 1 ps, 4 workers.
+  + **FastTffm**: 49 seconds. 748418 examples / second.
   
 ## Input Data Format
 
