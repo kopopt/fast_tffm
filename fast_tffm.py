@@ -62,7 +62,7 @@ def read_config(section, option, not_null = True):
     print '  {0} = {1}'.format(option, value)
     return value
 def read_strs_config(section, option, not_null = True):
-  val = read_config(section, option, not_null = True)
+  val = read_config(section, option, not_null)
   if val != None:
     return [s.strip() for s in val.split(STR_DELIMITER)]
   return None
