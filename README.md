@@ -52,8 +52,10 @@ python fast_tffm.py dist_predict sample.cfg worker 1
   
 ## Input Data Format
 
-[label] [fid]:[fval]
+[label] [fid]:[fval] [fid]:[fval] ...
 
 label: currently only support binary. 0 or 1
 
 fid: feature id. Starting from 0.
+
+Check the data files in the data folder for more examples. The data files are samples from [criteo lab dataset](http://labs.criteo.com/tag/dataset/).
