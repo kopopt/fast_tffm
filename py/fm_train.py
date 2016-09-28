@@ -77,7 +77,11 @@ def _train(sess, supervisor, worker_num, is_master_worker, need_to_init, model, 
       for i in range(epoch_num):
         training_loss, training_example_num = model.training_stat[i].eval(sess)
         validation_loss, validation_example_num = model.validation_stat[i].eval(sess)
-        print '-- [Epoch %d] Training: %.5f; Validation: %.5f'%(i, training_loss / training_example_num, validation_loss / validation_example_num)
+        print '-- [Epoch %d] Training: %.5f'%(i, training_loss / training_example_num),
+        if validation_example_num != 0:
+          print '; Validation: %.5f'%(validation_loss / validation_example_num)
+        else:
+          print
       model.saver.save(sess, model_file, write_meta_graph = False)
       print 'Model saved to', model_file
 
