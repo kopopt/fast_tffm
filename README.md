@@ -3,7 +3,7 @@ An efficient distributation factoriazation machine implementation based on tenso
 
 1. Support both multi-thread local machine training and distributed training.
 2. Can easily benefit from numerous implementations of operators in tensorflow, e.g., different optimizors, loss functions.
-3. Customized c++ operators, much faster (10x) than pure python implementations.
+3. Customized c++ operators, significantly faster than pure python implementations. Comparable performance (actually faster according to my benchmark) with pure c++ implementation.
 
 ## Quick Start
 ### Compile
@@ -39,3 +39,21 @@ python fast_tffm.py dist_predict sample.cfg ps 1
 python fast_tffm.py dist_predict sample.cfg worker 0
 python fast_tffm.py dist_predict sample.cfg worker 1
 ```
+## Benchmark
+
+1. Local Mode. Training Efficiency compared with difacto using the same configuration
+
+  + *Configuration*: 36672494 training examples, 10 threads, factor_num = 8, batch_size = 10000, epoch_num = 1, vocabulary_size = 40000000
+  + **Difacto**: 337 seconds. 108820 examples / second.
+  + **FastTffm**: 157 seconds. 233582 examples / second.
+  
+2. Distriubuted Mode.
+  + Coming soon...
+  
+## Input Data Format
+
+[label] [fid]:[fval]
+
+label: currently only support binary. 0 or 1
+
+fid: feature id. Starting from 0.
