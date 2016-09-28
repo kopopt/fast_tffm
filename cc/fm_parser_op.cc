@@ -2,9 +2,12 @@
 #include "tensorflow/core/framework/op_kernel.h"
 #include <ctime>
 #include <cstdio>
+#include <fstream>
 
 REGISTER_OP("FmParser")
-    .Input("lines: string")
+    .Input("file_id: int32")
+    .Input("file_name: string")
+    .Input("batch_size: int32")
     .Output("labels: float32")
     .Output("ori_ids: int64")
     .Output("feature_ids: int32")
@@ -15,12 +18,45 @@ using namespace tensorflow;
 
 class FmParserOp : public OpKernel {
  public:
+
   explicit FmParserOp(OpKernelConstruction* ctx) : OpKernel(ctx) {}
 
   void Compute(OpKernelContext* ctx) override {
-    const Tensor* lines_tensor;
-    OP_REQUIRES_OK(ctx, ctx->input("lines", &lines_tensor));
-    auto lines = lines_tensor->flat<string>();
+    const Tensor* fid_tensor;
+    OP_REQUIRES_OK(ctx, ctx->input("file_id", &fid_tensor));
+    auto fid = fid_tensor->scalar<int32>()();
+    OP_REQUIRES(ctx, fid >= 0, errors::InvalidArgument("file_id should be greater than 0."))
+    const Tensor* fname_tensor;
+    OP_REQUIRES_OK(ctx, ctx->input("file_name", &fname_tensor));
+    auto fname = fname_tensor->scalar<string>()();
+    const Tensor* batch_size_tensor;
+    OP_REQUIRES_OK(ctx, ctx->input("batch_size", &batch_size_tensor));
+    auto batch_size = batch_size_tensor->scalar<int32>()();
+
+    std::vector<string> lines;
+    {
+      mutex_lock l(mu_);
+      OP_REQUIRES(ctx, fid >= file_id_, errors::InvalidArgument("file_id is less than last file_id", file_id_))
+      if (fid > file_id_) {
+        if (file_stream_ != NULL) {
+          file_stream_->close();
+          delete file_stream_;
+        }
+        file_stream_ = new std::ifstream(fname);
+        OP_REQUIRES(ctx, file_stream_->is_open(), errors::InvalidArgument("Fails to open file ", fname))
+        file_name_ = fname;
+        file_id_ = fid;
+      } else {
+        OP_REQUIRES(ctx, file_name_ == fname, errors::InvalidArgument("With the same file id, file name is different."))
+      }
+      string line;
+      int k = 0;
+      while (k < batch_size && std::getline(*file_stream_, line)) {
+        lines.push_back(line);
+        k += 1;
+      }
+    }
+
     std::vector<float> labels;
     std::map<int64, int32> ori_id_map;
     std::vector<int32> feature_ids;
@@ -28,7 +64,7 @@ class FmParserOp : public OpKernel {
     std::vector<int32> feature_poses;
     feature_poses.push_back(0);
     for (size_t i = 0; i < lines.size(); ++i) {
-      ParseLine(ctx, lines(i), labels, ori_id_map, feature_ids, feature_vals, feature_poses);
+      ParseLine(ctx, lines[i], labels, ori_id_map, feature_ids, feature_vals, feature_poses);
     }
 
     std::vector<int64> ori_ids(ori_id_map.size(), 0);
@@ -44,6 +80,12 @@ class FmParserOp : public OpKernel {
   }
 
  private:
+  mutex mu_;
+  std::ifstream* file_stream_ = NULL;
+  std::string file_name_ = "";
+  int file_id_ = -1;
+
+
   void ParseLine(OpKernelContext* ctx, const string& line, std::vector<float>& labels,
       std::map<int64, int32>& ori_id_map, std::vector<int32>& feature_ids, std::vector<float>& feature_vals, std::vector<int32>& feature_poses) {
     const char* p = line.c_str();
