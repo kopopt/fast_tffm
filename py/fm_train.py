@@ -1,39 +1,44 @@
-import threading, time
+import threading, time, random
 from py.fm_model import LocalFmModel, DistFmModel
 import tensorflow as tf
 
 class _TrainStats:
   pass
-def _train(sess, supervisor, worker_num, is_master_worker, need_to_init, model, training_files, validation_files, epoch_num, thread_num, model_file, output_progress_every_n_examples = 10000):
+def _train(sess, supervisor, worker_num, is_master_worker, need_to_init, model, train_files, weight_files, validation_files, epoch_num, thread_num, model_file, output_progress_every_n_examples = 10000):
   with sess as sess:
     if is_master_worker:
+      if weight_files != None:
+        train_and_weight_files = zip(train_files, weight_files)
+      else:
+        train_and_weight_files = zip(train_files, ["" for i in range(len(train_files))])
       if need_to_init:
         sess.run(model.init_vars)
       for i in range(epoch_num):
-        for fname in training_files:
-          sess.run(model.filename_enqueue_op, feed_dict = {model.epoch_id: i, model.is_training: True, model.filename: fname})
+        random.shuffle(train_and_weight_files)
+        for data_file, weight_file in train_and_weight_files:
+          sess.run(model.file_enqueue_op, feed_dict = {model.epoch_id: i, model.is_training: True, model.data_file: data_file, model.weight_file: weight_file})
         if validation_files != None:
-          for fname in validation_files:
-            sess.run(model.filename_enqueue_op, feed_dict = {model.epoch_id: i, model.is_training: False, model.filename: fname})
-      sess.run(model.filename_close_queue_op)
+          for validation_file in validation_files:
+            sess.run(model.file_enqueue_op, feed_dict = {model.epoch_id: i, model.is_training: False, model.data_file: validation_file, model.weight_file: ""})
+      sess.run(model.file_close_queue_op)
     try:
       fid = 0
       while True:
-        epoch_id, is_training, fname = sess.run(model.filename_dequeue_op)
+        epoch_id, is_training, data_file, weight_file = sess.run(model.file_dequeue_op)
         train_stats = _TrainStats()
         train_stats.processed_example_num = 0
         train_stats.lock = threading.Lock()
         start_time = time.time()
-        print '[Epoch %d] Task: %s; File: %s. Start processing ...'%(epoch_id, 'Training' if is_training else 'Validation', fname)
+        print '[Epoch %d] Task: %s; Data File: %s'%(epoch_id, 'Training' if is_training else 'Validation', data_file), '; Weight File: %s .'%weight_file if weight_file != '' else '.'
 
         def run():
           try:
             while not coord.should_stop() and not (supervisor != None and supervisor.should_stop()):
               if is_training:
-                _, loss, example_num = sess.run([model.opt, model.loss, model.example_num], feed_dict = {model.file_id: fid, model.file_name: fname})
+                _, loss, example_num = sess.run([model.opt, model.loss, model.example_num], feed_dict = {model.file_id: fid, model.data_file: data_file, model.weight_file: weight_file})
                 global_loss, global_example_num = model.training_stat[epoch_id].update(sess, loss, example_num)
               else:
-                loss, example_num = sess.run([model.loss, model.example_num], feed_dict = {model.file_id: fid, model.file_name: fname})
+                loss, example_num = sess.run([model.loss, model.example_num], feed_dict = {model.file_id: fid, model.data_file: data_file, model.weight_file: weight_file})
                 global_loss, global_example_num = model.validation_stat[epoch_id].update(sess, loss, example_num)
               if example_num == 0:
                 break
@@ -91,19 +96,19 @@ def _queue_size(train_files, validation_files, epoch_num):
     qsize += len(validation_files)
   return qsize * epoch_num
 
-def local_train(train_files, validation_files, epoch_num, vocabulary_size, vocabulary_block_num, factor_num, init_value_range, optimizer, batch_size, factor_lambda, bias_lambda, thread_num, model_file):
-  model = LocalFmModel(_queue_size(train_files, validation_files, epoch_num), epoch_num, vocabulary_size, vocabulary_block_num, factor_num, init_value_range, optimizer, batch_size, factor_lambda, bias_lambda)
-  _train(tf.Session(), None, 1, True, True, model, train_files, validation_files, epoch_num, thread_num, model_file)
+def local_train(train_files, weight_files, validation_files, epoch_num, vocabulary_size, vocabulary_block_num, hash_feature_id, factor_num, init_value_range, loss_type, optimizer, batch_size, factor_lambda, bias_lambda, thread_num, model_file):
+  model = LocalFmModel(_queue_size(train_files, validation_files, epoch_num), epoch_num, vocabulary_size, vocabulary_block_num, hash_feature_id,factor_num, init_value_range, loss_type, optimizer, batch_size, factor_lambda, bias_lambda)
+  _train(tf.Session(), None, 1, True, True, model, train_files, weight_files, validation_files, epoch_num, thread_num, model_file)
 
-def dist_train(ps_hosts, worker_hosts, job_name, task_idx, train_files, validation_files, epoch_num, vocabulary_size, vocabulary_block_num,factor_num, init_value_range, optimizer, batch_size, factor_lambda, bias_lambda, thread_num, model_file):
+def dist_train(ps_hosts, worker_hosts, job_name, task_idx, train_files, weight_files, validation_files, epoch_num, vocabulary_size, vocabulary_block_num, hash_feature_id, factor_num, init_value_range, loss_type, optimizer, batch_size, factor_lambda, bias_lambda, thread_num, model_file):
   cluster = tf.train.ClusterSpec({'ps': ps_hosts, 'worker': worker_hosts})
   server = tf.train.Server(cluster, job_name = job_name, task_index = task_idx)
   if job_name == 'ps':
     server.join()
-  elif job_name == 'worker':      
-    model = DistFmModel(_queue_size(train_files, validation_files, epoch_num), cluster, task_idx, epoch_num, vocabulary_size, vocabulary_block_num, factor_num, init_value_range, optimizer, batch_size, factor_lambda, bias_lambda)
+  elif job_name == 'worker':    
+    model = DistFmModel(_queue_size(train_files, validation_files, epoch_num), cluster, task_idx, epoch_num, vocabulary_size, vocabulary_block_num, hash_feature_id, factor_num, init_value_range, loss_type, optimizer, batch_size, factor_lambda, bias_lambda)
     sv = tf.train.Supervisor(is_chief = (task_idx == 0), init_op = model.init_vars)
-    _train(sv.managed_session(server.target, config = tf.ConfigProto(log_device_placement=True)), sv, len(worker_hosts), task_idx == 0, False, model, train_files, validation_files, epoch_num, thread_num, model_file)
+    _train(sv.managed_session(server.target, config = tf.ConfigProto(log_device_placement=False)), sv, len(worker_hosts), task_idx == 0, False, model, train_files, weight_files, validation_files, epoch_num, thread_num, model_file)
   else:
     sys.stderr.write('Invalid Job Name: %s'%job_name)
     raise

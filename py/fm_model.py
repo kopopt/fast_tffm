@@ -19,9 +19,9 @@ class ModelStat:
     return sess.run([self.total_loss, self.total_example_num])
 
 class FmModelBase:
-  def __init__(self, queue_size, epoch_num, vocabulary_size, vocabulary_block_num, factor_num, init_value_range, optimizer, batch_size, factor_lambda, bias_lambda):
+  def __init__(self, queue_size, epoch_num, vocabulary_size, vocabulary_block_num, hash_feature_id, factor_num, init_value_range, loss_type, optimizer, batch_size, factor_lambda, bias_lambda):
     with self.main_ps_device():
-      self.filename_queue = tf.FIFOQueue(queue_size, [tf.int32, tf.bool, tf.string], shared_name = 'global_queue')
+      self.file_queue = tf.FIFOQueue(queue_size, [tf.int32, tf.bool, tf.string, tf.string], shared_name = 'global_queue')
 
     with self.default_device():
       self.finished_worker_num = tf.Variable(0)
@@ -36,22 +36,27 @@ class FmModelBase:
 
       self.epoch_id = tf.placeholder(dtype = tf.int32)
       self.is_training = tf.placeholder(dtype = tf.bool)
-      self.filename = tf.placeholder(dtype = tf.string)
-      self.filename_enqueue_op = self.filename_queue.enqueue((self.epoch_id, self.is_training, self.filename))
-      self.filename_dequeue_op = self.filename_queue.dequeue()
-      self.filename_close_queue_op = self.filename_queue.close()
+      self.data_file = tf.placeholder(dtype = tf.string)
+      self.weight_file = tf.placeholder(dtype = tf.string)
+      self.file_enqueue_op = self.file_queue.enqueue((self.epoch_id, self.is_training, self.data_file, self.weight_file))
+      self.file_dequeue_op = self.file_queue.dequeue()
+      self.file_close_queue_op = self.file_queue.close()
 
       self.vocab_blocks = []                   
       vocab_size_per_block = vocabulary_size / vocabulary_block_num + 1
       for i in range(vocabulary_block_num):
         self.vocab_blocks.append(tf.Variable(tf.random_uniform([vocab_size_per_block, factor_num + 1], -init_value_range, init_value_range), name = 'vocab_block_%d'%i))
       self.file_id = tf.placeholder(dtype = tf.int32)
-      self.file_name = tf.placeholder(dtype = tf.string)
-      labels, ori_ids, feature_ids, feature_vals, feature_poses = fm_ops.fm_parser(self.file_id, self.file_name, batch_size)
+      labels, weights, ori_ids, feature_ids, feature_vals, feature_poses = fm_ops.fm_parser(self.file_id, self.data_file, self.weight_file, batch_size, vocabulary_size, hash_feature_id)
       self.example_num = tf.size(labels)
       local_params = tf.nn.embedding_lookup(self.vocab_blocks, ori_ids)
       self.pred_score, reg_score = fm_ops.fm_scorer(feature_ids, local_params, feature_vals, feature_poses, factor_lambda, bias_lambda)
-      self.loss = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(self.pred_score, labels))
+      if loss_type == 'logistic':
+        self.loss = tf.reduce_sum(weights * tf.nn.sigmoid_cross_entropy_with_logits(self.pred_score, labels))
+      elif loss_type == 'mse':
+        self.loss = tf.reduce_sum(weights * tf.square(self.pred_score - labels))
+      else:
+        self.loss = None
       if optimizer != None:
         self.opt = optimizer.minimize(self.loss + reg_score)
       self.init_vars = tf.initialize_all_variables()
@@ -64,10 +69,10 @@ class FmModelBase:
     raise NotImplementedError("Subclasses should implement this!")
 
 class DistFmModel(FmModelBase):
-  def __init__(self, queue_size, cluster, task_index, epoch_num, vocabulary_size, vocabulary_block_num, factor_num, init_value_range, optimizer, batch_size, factor_lambda, bias_lambda):
+  def __init__(self, queue_size, cluster, task_index, epoch_num, vocabulary_size, vocabulary_block_num, hash_feature_id, factor_num, init_value_range, loss_type, optimizer, batch_size, factor_lambda, bias_lambda):
     self.task_index = task_index
     self.cluster = cluster
-    FmModelBase.__init__(self, queue_size, epoch_num, vocabulary_size, vocabulary_block_num, factor_num, init_value_range, optimizer, batch_size, factor_lambda, bias_lambda)
+    FmModelBase.__init__(self, queue_size, epoch_num, vocabulary_size, vocabulary_block_num, hash_feature_id, factor_num, init_value_range, loss_type, optimizer, batch_size, factor_lambda, bias_lambda)
 
   def main_ps_device(self):
     return tf.device('/job:ps/task:0')
