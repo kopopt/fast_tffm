@@ -53,11 +53,17 @@ python fast_tffm.py dist_predict sample.cfg worker 1
   + **FastTffm**: 49 seconds. 748418 examples / second.
   
 ## Input Data Format
+1. Data File
+  ```
+  <label> <fid_0>[:<fval_0>] [<fid_1>[:<fval_1>] ...]
+  ```
+  \<label\>: 0 or 1 if loss_type = logistic; any real number if loss_type = mse.
 
-[label] [fid]:[fval] [fid]:[fval] ...
+  \<fid_k\>: An integer if hash_feature_id = False; Arbitrary string if hash_feature_id = True
 
-label: currently only support binary. 0 or 1
+  \<fval_k\>: Any real number. Default value 1.0 if omitted.
 
-fid: feature id. Starting from 0.
+2. Weight File
+  Should have the same line number with the corresponding data file. Each line contains one real number.
 
-Check the data files in the data folder for more examples. The data files are sampled from [criteo lab dataset](http://labs.criteo.com/tag/dataset/).
+Check the data/weight files in the data folder for details. The data files are sampled from [criteo lab dataset](http://labs.criteo.com/tag/dataset/).
