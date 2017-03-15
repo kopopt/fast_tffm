@@ -52,7 +52,7 @@ class FmModelBase:
       local_params = tf.nn.embedding_lookup(self.vocab_blocks, ori_ids)
       self.pred_score, reg_score = fm_ops.fm_scorer(feature_ids, local_params, feature_vals, feature_poses, factor_lambda, bias_lambda)
       if loss_type == 'logistic':
-        self.loss = tf.reduce_sum(weights * tf.nn.sigmoid_cross_entropy_with_logits(self.pred_score, labels))
+        self.loss = tf.reduce_sum(weights * tf.nn.sigmoid_cross_entropy_with_logits(logits=self.pred_score, labels=labels))
       elif loss_type == 'mse':
         self.loss = tf.reduce_sum(weights * tf.square(self.pred_score - labels))
       else:
